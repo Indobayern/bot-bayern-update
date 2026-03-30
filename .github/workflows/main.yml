@@ -1,0 +1,40 @@
+name: Bayern Auto Bot
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # Robot bangun setiap 30 menit
+  workflow_dispatch: # Agar kamu bisa tes jalan manual nanti
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout kode
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Library
+        run: pip install tweepy feedparser google-generativeai
+
+      - name: Jalankan Bot
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python bot.py
+
+      - name: Simpan Catatan Link (Memory)
+        run: |
+          git config --global user.name "IndoBayern-Bot"
+          git config --global user.email "bot@indobayern.com"
+          git add last_links.txt
+          git commit -m "Update memori link [skip ci]" || echo "Tidak ada berita baru"
+          git push
