@@ -1,64 +1,69 @@
-import tweepy
 import feedparser
 import os
+import smtplib
+from email.message import EmailMessage
 import google.generativeai as genai
 
-# 1. SETUP API
-def get_x_client():
-    return tweepy.Client(
-        consumer_key=os.getenv("X_API_KEY"),
-        consumer_secret=os.getenv("X_API_SECRET"),
-        access_token=os.getenv("X_ACCESS_TOKEN"),
-        access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET")
-    )
-
+# 1. SETUP API & EMAIL
+EMAIL_SENDER = os.getenv("EMAIL_SENDER")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+BLOGGER_EMAIL = os.getenv("BLOGGER_EMAIL")
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-pro')
 
-# 2. SUMBER BERITA
-RSS_URL = "https://www.bavarianfootballworks.com/rss/current.xml"
+# 2. SUMBER BERITA (BFW & Official)
+RSS_SOURCES = [
+    "https://www.bavarianfootballworks.com/rss/current.xml",
+    "https://fcbayern.com/en/news/rss"
+]
 
 def jalankan_bot():
-    client = get_x_client()
-    file_memori = "last_links.txt"
-
+    file_memori = "posted_blogs.txt"
     if not os.path.exists(file_memori):
         with open(file_memori, "w") as f: f.write("")
 
     with open(file_memori, "r") as f:
         posted_links = f.read().splitlines()
 
-    feed = feedparser.parse(RSS_URL)
-    
-    # Ambil 3 berita terbaru saja
-    for entry in feed.entries[:3]:
-        link = entry.link
-        
-        # Cek apakah sudah pernah diposting
-        if link in posted_links:
-            continue
+    for url in RSS_SOURCES:
+        feed = feedparser.parse(url)
+        for entry in feed.entries[:2]: # Ambil 2 terbaru dari tiap sumber
+            if entry.link in posted_links:
+                continue
 
-        # Terjemahkan judul pakai Gemini
-        prompt = f"Terjemahkan judul berita Bayern Munich ini ke Bahasa Indonesia yang luwes untuk fans Twitter: {entry.title}. Hasilnya saja, tanpa tanda petik."
-        try:
-            response = model.generate_content(prompt)
-            judul_indo = response.text.strip()
-        except:
-            judul_indo = entry.title
+            # PROMPT GEMINI (Gaya Sastra & Santai)
+            prompt = (
+                f"Kamu adalah admin Indobayern, fans berat Bayern Munich. "
+                f"Terjemahkan dan ceritakan kembali berita ini ke Bahasa Indonesia yang seru: '{entry.title}'. "
+                f"Isi berita: '{entry.summary}'. "
+                f"Buat judul yang menarik dan isi berita minimal 3 paragraf. "
+                f"Akhiri dengan 'Mia San Mia!' dan ajakan beli jersey di Shopee: https://shope.ee/contoh-link"
+            )
 
-        # POSTING
-        tweet_text = f"{judul_indo}\n\n{link}"
-        
-        # Kita hapus 'try-except' di sini agar kalau gagal, GitHub langsung jadi MERAH
-        # Jadi kita tahu pasti apa erornya.
-        client.create_tweet(text=tweet_text)
-        
-        # Catat link
-        with open(file_memori, "a") as f:
-            f.write(link + "\n")
-        
-        print(f"Berhasil posting: {judul_indo}")
-        return 
+            try:
+                response = model.generate_content(prompt)
+                konten_indo = response.text
+                judul_indo = konten_indo.split('\n')[0].replace('Judul: ', '')
+            except:
+                continue
+
+            # KIRIM KE BLOGGER
+            msg = EmailMessage()
+            msg.set_content(konten_indo)
+            msg['Subject'] = judul_indo
+            msg['From'] = EMAIL_SENDER
+            msg['To'] = BLOGGER_EMAIL
+
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+                smtp.login(EMAIL_SENDER, EMAIL_PASSWORD)
+                smtp.send_message(msg)
+
+            # CATAT AGAR TIDAK DUPLIKAT
+            with open(file_memori, "a") as f:
+                f.write(entry.link + "\n")
+            
+            print(f"Berhasil post: {judul_indo}")
+            return # Post satu-satu saja agar tidak dianggap spam
 
 if __name__ == "__main__":
     jalankan_bot()
