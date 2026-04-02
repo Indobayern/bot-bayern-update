@@ -4,58 +4,65 @@ import smtplib
 import requests
 from bs4 import BeautifulSoup
 from email.message import EmailMessage
-import google.generativeai as genai
+from deep_translator import GoogleTranslator
 
 # ==========================================
-# 1. KONFIGURASI (AMBIL DARI GITHUB SECRETS)
+# 1. KONFIGURASI
 # ==========================================
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 BLOGGER_EMAIL = os.getenv("BLOGGER_EMAIL")
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-1.5-flash')
 
-# DAFTAR SUMBER BERITA
 RSS_SOURCES = [
     "https://fcbayern.com/en/news/rss", 
     "https://www.bavarianfootballworks.com/rss/current.xml"
 ]
 
-# GANTI LINK DI BAWAH INI DENGAN LINK SHOPEE AFFILIATE KAMU
-LINK_SHOPEE = "https://shope.ee/MASUKKAN_LINK_KAMU_DISINI"
+LINK_SHOPEE = "https://shope.ee/MASUKKAN_LINK_KAMU"
+
+# DAFTAR KATA KUNCI YANG AKAN DIBUANG (FILTER SAMPAH)
+BLACKLIST = [
+    "Bavarian Podcast Works", "Acast", "Spotify", "Apple Podcasts", 
+    "follow us", "Check out the latest episodes", "leading podcast distributor",
+    "Twitter", "Facebook", "Instagram", "Threads", "TikTok"
+]
 
 # ==========================================
-# 2. FUNGSI SCRAPING (AMBIL DATA LENGKAP)
+# 2. FUNGSI PEMBERSIH & PENYAMBUNG ARTIKEL
 # ==========================================
 def ambil_data_lengkap(url):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers, timeout=15)
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Cari Foto Utama
+        # Ambil Foto Utama
         foto = soup.find("meta", property="og:image")
         url_foto = foto["content"] if foto else ""
 
-        # Cari Teks & Tweet
+        # Ambil Paragraf & Filter Tweet/Boilerplate
         konten_mentah = []
-        # Mengambil paragraf, sub-judul, dan blockquote (untuk tweet)
-        for tag in soup.find_all(['p', 'blockquote', 'h3', 'h2']):
+        for tag in soup.find_all(['p', 'blockquote', 'h3']):
+            teks = tag.get_text(strip=True)
+            
+            # CEK APAKAH PARAGRAF MENGANDUNG KATA BLACKLIST
+            if any(word.lower() in teks.lower() for word in BLACKLIST):
+                continue # Skip paragraf ini
+            
+            # Deteksi Tweet (Ubah jadi format kutipan sederhana)
             if tag.name == 'blockquote' and 'twitter-tweet' in tag.get('class', []):
-                link_tweet = tag.find('a', href=True)
-                url_t = link_tweet['href'] if link_tweet else ""
-                konten_mentah.append(f"[TWEET_DITEMUKAN: {tag.get_text(strip=True)} | Link: {url_t}]")
+                konten_mentah.append(f"<div style='border-left: 4px solid #dc052d; padding: 10px; font-style: italic;'>Kutipan X (Twitter): {teks}</div>")
             else:
-                konten_mentah.append(tag.get_text(strip=True))
+                konten_mentah.append(teks)
         
-        teks_asli = "\n\n".join(konten_mentah)
-        return teks_asli, url_foto
-    except Exception as e:
-        print(f"Gagal mengambil data dari {url}: {e}")
+        # Gabungkan maksimal 12 paragraf agar tidak kepanjangan
+        isi_berita = "\n\n".join(konten_mentah[:12])
+        return isi_berita, url_foto
+    except:
         return None, ""
 
 # ==========================================
-# 3. JALANKAN PROSES BOT
+# 3. PROSES TRANSLASI & POSTING
 # ==========================================
 def jalankan_bot():
     file_memori = "posted_blogs.txt"
@@ -65,75 +72,57 @@ def jalankan_bot():
     with open(file_memori, "r") as f:
         posted_links = f.read().splitlines()
 
+    translator = GoogleTranslator(source='en', target='id')
+
     for rss_url in RSS_SOURCES:
         feed = feedparser.parse(rss_url)
-        
-        for entry in feed.entries[:2]: # Cek 2 berita terbaru per sumber
+        for entry in feed.entries[:2]:
             if entry.link in posted_links:
                 continue
 
             try:
-                teks_mentah, url_foto = ambil_data_lengkap(entry.link)
-                if not teks_mentah or len(teks_mentah) < 300:
-                    continue
+                teks_asli, url_foto = ambil_data_lengkap(entry.link)
+                if not teks_asli: continue
 
-                # INSTRUKSI GEMINI (Gaya Sastra & Editor Senior)
-                prompt = (
-                    f"Kamu adalah Editor Senior blog Indobayern. Tugasmu:\n"
-                    f"1. Terjemahkan berita ini ke Bahasa Indonesia yang seru, luwes, dan emosional bagi fans Bayern.\n"
-                    f"2. Hapus semua teks yang tidak relevan (iklan podcast, Spotify, follow medsos luar, dsb).\n"
-                    f"3. Jika ada tanda [TWEET_DITEMUKAN: ...], buatkan format HTML blockquote yang cantik untuk isi tweet tersebut dan sertakan link aslinya.\n"
-                    f"4. Gunakan diksi Sastra Indonesia yang baik, bukan sekadar translasi mesin.\n"
-                    f"5. Judul harus menarik (Clickbait tapi elegan).\n\n"
-                    f"Teks Asli: {teks_mentah[:4500]}"
-                )
-
-                response = model.generate_content(prompt)
-                hasil_ai = response.text
+                # Terjemahkan (Google Translate stabil & cepat)
+                judul_id = translator.translate(entry.title)
+                isi_id = translator.translate(teks_asli[:4000]) # Batas 4rb karakter
                 
-                # Memisahkan Judul dan Isi
-                baris = hasil_ai.split('\n')
-                judul_indo = baris[0].replace('Judul:', '').replace('**', '').strip()
-                isi_indo = "<br><br>".join(baris[1:]).strip()
-
-                # TEMPLATE TAMPILAN BLOG (HTML)
+                # Format HTML (Tetap dengan gaya Indobayern)
                 html_content = f"""
-                <div style="font-family: 'Helvetica Neue', Arial, sans-serif; color: #333; line-height: 1.8; max-width: 700px; margin: auto;">
-                    <img src="{url_foto}" style="width: 100%; border-radius: 12px; margin-bottom: 20px;" />
-                    <h1 style="color: #dc052d; font-size: 28px;">{judul_indo}</h1>
-                    <div style="font-size: 17px; text-align: justify;">{isi_indo}</div>
+                <div style="font-family: Arial, sans-serif; line-height: 1.8; color: #333;">
+                    <img src="{url_foto}" style="width: 100%; border-radius: 8px;" />
+                    <h2 style="color: #dc052d;">{judul_id}</h2>
+                    <div style="text-align: justify;">{isi_id.replace('. ', '.<br><br>')}</div>
                     <br><hr>
-                    <p style="font-size: 12px; color: #999;">Sumber asli: <a href="{entry.link}">{entry.link}</a></p>
-                    
-                    <div style="background: #dc052d; color: white; padding: 25px; border-radius: 15px; text-align: center; margin-top: 30px;">
-                        <h2 style="margin: 0; font-size: 22px;">🔴⚪ Mia San Mia! 🔴⚪</h2>
-                        <p style="margin: 10px 0 20px;">Dapatkan Jersey & Aksesoris Bayern Munich terbaru di Shopee:</p>
-                        <a href="{LINK_SHOPEE}" style="display: inline-block; background: #fff; color: #dc052d; padding: 15px 35px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 18px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">BELI SEKARANG DI SHOPEE</a>
+                    <p style="font-size: 11px; color: #777;">Sumber Berita: {entry.link}</p>
+                    <div style="background: #dc052d; color: white; padding: 20px; border-radius: 10px; text-align: center;">
+                        <h3 style="margin: 0;">🔴⚪ Mia San Mia! 🔴⚪</h3>
+                        <p>Dapatkan Jersey Bayern Munich terbaru di Shopee:</p>
+                        <a href="{LINK_SHOPEE}" style="display: inline-block; background: white; color: #dc052d; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">BELI DI SHOPEE</a>
                     </div>
-                    <p style="text-align: center; color: #666; font-style: italic; margin-top: 20px;">Admin Indobayern - Salam Satu Nyali!</p>
                 </div>
                 """
-                
-                # KIRIM EMAIL KE BLOGGER
+
+                # Kirim ke Blogger
                 msg = EmailMessage()
-                msg['Subject'] = judul_indo
+                msg['Subject'] = judul_id
                 msg['From'] = EMAIL_SENDER
                 msg['To'] = BLOGGER_EMAIL
                 msg.add_alternative(html_content, subtype='html')
 
-                with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+                with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15) as smtp:
                     smtp.login(EMAIL_SENDER, EMAIL_PASSWORD)
                     smtp.send_message(msg)
 
-                # Simpan agar tidak diposting ulang
                 with open(file_memori, "a") as f:
                     f.write(entry.link + "\n")
                 
-                print(f"Sukses Posting: {judul_indo}")
-                return # Posting satu per satu agar lebih rapi
+                print(f"Sukses Posting: {judul_id}")
+                return # Posting satu per satu per 3 jam
 
             except Exception as e:
-                print(f"Terjadi kesalahan: {e}")
+                print(f"Eror: {e}")
 
 if __name__ == "__main__":
     jalankan_bot()
