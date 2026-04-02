@@ -1,13 +1,16 @@
 name: Bayern Auto Bot
 
 on:
-  workflow_dispatch: # Supaya bisa dijalankan manual
+  workflow_dispatch:
   schedule:
-    - cron: '0 */3 * * *' # Otomatis jalan setiap 3 jam
+    - cron: '0 */3 * * *'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Izin untuk menulis kembali ke repository
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -29,3 +32,12 @@ jobs:
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           BLOGGER_EMAIL: ${{ secrets.BLOGGER_EMAIL }}
         run: python bot.py
+
+      # LANGKAH PENTING: Simpan Catatan Link Berita
+      - name: Commit dan Push Catatan
+        run: |
+          git config --global user.name "Indobayern Bot"
+          git config --global user.email "bot@indobayern.com"
+          git add posted_blogs.txt
+          git commit -m "Update catatan berita [skip ci]" || echo "Tidak ada berita baru"
+          git push
