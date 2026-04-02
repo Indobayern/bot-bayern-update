@@ -18,7 +18,7 @@ RSS_SOURCES = [
     "https://www.bavarianfootballworks.com/rss/current.xml"
 ]
 
-LINK_SHOPEE = "https://shope.ee/MASUKKAN_LINK_KAMU" # Ganti link kamu!
+LINK_SHOPEE = "https://shope.ee/MASUKKAN_LINK_KAMU" # GANTI DENGAN LINK KAMU!
 
 BLACKLIST = [
     "Bavarian Podcast Works", "Acast", "Spotify", "Apple Podcasts", 
@@ -26,13 +26,12 @@ BLACKLIST = [
     "Twitter", "Facebook", "Instagram", "Threads", "TikTok"
 ]
 
-# Header penyamaran agar tidak dianggap robot
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
 
 # ==========================================
-# 2. FUNGSI AMBIL DATA (ANTI-BLOCK)
+# 2. FUNGSI AMBIL DATA
 # ==========================================
 def ambil_data_lengkap(url):
     try:
@@ -63,7 +62,8 @@ def ambil_data_lengkap(url):
 def jalankan_bot():
     file_memori = "posted_blogs.txt"
     if not os.path.exists(file_memori):
-        with open(file_memori, "w") as f: f.write("")
+        with open(file_memori, "w") as f:
+            f.write("")
 
     with open(file_memori, "r") as f:
         posted_links = f.read().splitlines()
@@ -72,22 +72,25 @@ def jalankan_bot():
 
     for rss_url in RSS_SOURCES:
         try:
-            print(f"Mencoba mengambil RSS dari: {rss_url}")
-            # PERBAIKAN: Mengambil RSS menggunakan requests (biar tidak kena reset)
+            print(f"Mengecek RSS: {rss_url}")
             rss_response = requests.get(rss_url, headers=HEADERS, timeout=15)
             feed = feedparser.parse(rss_response.content)
             
             for entry in feed.entries[:2]:
                 if entry.link in posted_links:
+                    print(f"Berita sudah ada: {entry.title}")
                     continue
 
                 teks_asli, url_foto = ambil_data_lengkap(entry.link)
-                if not teks_asli: continue
+                if not teks_asli:
+                    continue
 
+                print(f"Menerjemahkan: {entry.title}")
                 judul_id = translator.translate(entry.title)
                 isi_id = translator.translate(teks_asli[:4000])
                 
-               html_content = f"""
+                # BAGIAN HTML (Pastikan indentasi sejajar di sini)
+                html_content = f"""
                 <div style="font-family: Arial, sans-serif; line-height: 1.8; color: #333;">
                     <img src="{url_foto}" style="width: 100%; border-radius: 8px; margin-bottom: 20px;" />
                     <h2 style="color: #dc052d; font-size: 24px;">{judul_id}</h2>
@@ -104,7 +107,6 @@ def jalankan_bot():
                         <p style="margin: 10px 0;">Dapatkan Jersey & Aksesoris Bayern Munich terbaru di Shopee:</p>
                         <a href="{LINK_SHOPEE}" style="display: inline-block; background: white; color: #dc052d; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">BELI DI SHOPEE</a>
                     </div>
-                    <p style="text-align: center; font-size: 12px; color: #999; margin-top: 15px;">Admin Indobayern - Portal Berita Bayern Munich Indonesia</p>
                 </div>
                 """
 
@@ -114,18 +116,18 @@ def jalankan_bot():
                 msg['To'] = BLOGGER_EMAIL
                 msg.add_alternative(html_content, subtype='html')
 
-                with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15) as smtp:
+                with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=20) as smtp:
                     smtp.login(EMAIL_SENDER, EMAIL_PASSWORD)
                     smtp.send_message(msg)
 
                 with open(file_memori, "a") as f:
                     f.write(entry.link + "\n")
                 
-                print(f"Sukses Posting: {judul_id}")
-                return # Posting satu dulu
+                print(f"Sukses Posting ke Blogger: {judul_id}")
+                return 
 
         except Exception as e:
-            print(f"Gagal di sumber {rss_url}: {e}")
+            print(f"Eror pada {rss_url}: {e}")
 
 if __name__ == "__main__":
     jalankan_bot()
