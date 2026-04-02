@@ -3,12 +3,13 @@ name: Bayern Auto Bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */3 * * *'
+    - cron: '0 */3 * * *' # Berjalan otomatis setiap 3 jam
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Izin untuk menulis kembali ke repository
+    
+    # BAGIAN PENTING: Memberi izin bot untuk menulis file ke repository
     permissions:
       contents: write
 
@@ -33,11 +34,11 @@ jobs:
           BLOGGER_EMAIL: ${{ secrets.BLOGGER_EMAIL }}
         run: python bot.py
 
-      # LANGKAH PENTING: Simpan Catatan Link Berita
-      - name: Commit dan Push Catatan
+      # LANGKAH SAKTI: Menyimpan catatan posted_blogs.txt agar tidak dobel posting
+      - name: Simpan Catatan Berita
         run: |
           git config --global user.name "Indobayern Bot"
           git config --global user.email "bot@indobayern.com"
           git add posted_blogs.txt
-          git commit -m "Update catatan berita [skip ci]" || echo "Tidak ada berita baru"
+          git commit -m "Bot: Update catatan berita [skip ci]" || echo "Tidak ada berita baru untuk dicatat"
           git push
