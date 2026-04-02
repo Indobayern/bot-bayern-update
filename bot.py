@@ -87,16 +87,24 @@ def jalankan_bot():
                 judul_id = translator.translate(entry.title)
                 isi_id = translator.translate(teks_asli[:4000])
                 
-                html_content = f"""
-                <div style="font-family: Arial, sans-serif; line-height: 1.8;">
-                    <img src="{url_foto}" style="width: 100%; border-radius: 8px;" />
-                    <h2 style="color: #dc052d;">{judul_id}</h2>
-                    <div>{isi_id.replace('. ', '.<br><br>')}</div>
-                    <br><hr>
-                    <div style="background: #dc052d; color: white; padding: 20px; border-radius: 10px; text-align: center;">
-                        <p>🔴⚪ <b>Mia San Mia!</b> 🔴⚪</p>
-                        <a href="{LINK_SHOPEE}" style="background: white; color: #dc052d; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">BELI DI SHOPEE</a>
+               html_content = f"""
+                <div style="font-family: Arial, sans-serif; line-height: 1.8; color: #333;">
+                    <img src="{url_foto}" style="width: 100%; border-radius: 8px; margin-bottom: 20px;" />
+                    <h2 style="color: #dc052d; font-size: 24px;">{judul_id}</h2>
+                    <div style="text-align: justify; font-size: 16px;">{isi_id.replace('. ', '.<br><br>')}</div>
+                    
+                    <br>
+                    <p style="font-size: 12px; color: #888; font-style: italic;">
+                        Sumber Asli: <a href="{entry.link}" style="color: #dc052d; text-decoration: none;">{entry.link}</a>
+                    </p>
+                    <hr style="border: 0; border-top: 1px solid #eee;">
+                    
+                    <div style="background: #dc052d; color: white; padding: 25px; border-radius: 12px; text-align: center; margin-top: 20px;">
+                        <h3 style="margin: 0; font-size: 20px;">🔴⚪ Mia San Mia! 🔴⚪</h3>
+                        <p style="margin: 10px 0;">Dapatkan Jersey & Aksesoris Bayern Munich terbaru di Shopee:</p>
+                        <a href="{LINK_SHOPEE}" style="display: inline-block; background: white; color: #dc052d; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">BELI DI SHOPEE</a>
                     </div>
+                    <p style="text-align: center; font-size: 12px; color: #999; margin-top: 15px;">Admin Indobayern - Portal Berita Bayern Munich Indonesia</p>
                 </div>
                 """
 
