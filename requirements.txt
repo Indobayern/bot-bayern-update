@@ -1,4 +1,4 @@
 feedparser
-deep-translator
+google-generativeai
 requests
 beautifulsoup4
